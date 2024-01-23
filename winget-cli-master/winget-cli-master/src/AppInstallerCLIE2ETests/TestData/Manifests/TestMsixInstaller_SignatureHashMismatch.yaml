@@ -1,0 +1,12 @@
+Id: AppInstallerTest.TestMsixSignatureHashMismatch
+Name: TestMsixSignatureHashMismatch
+Version: 1.0.0.0
+Publisher: AppInstallerTest
+License: Test
+Installers:
+  - Arch: x86
+    Url: https://localhost:5001/TestKit/AppInstallerTestMsixInstaller/AppInstallerTestMsixInstaller.msix
+    Sha256: <MSIXHASH>
+    SignatureSha256: 0000000000000000000000000000000000000000000000000000000000000000
+    InstallerType: msix
+ManifestVersion: 0.1.0

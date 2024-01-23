@@ -1,0 +1,12 @@
+Id: AppInstallerTest.TestMsixWithSignatureHash
+Name: TestMsixWithSignatureHash
+Version: 1.0.0.0
+Publisher: AppInstallerTest
+License: Test
+Installers:
+  - Arch: x86
+    Url: https://localhost:5001/TestKit/AppInstallerTestMsixInstaller/AppInstallerTestMsixInstaller.msix
+    Sha256: <MSIXHASH>
+    SignatureSha256: <SIGNATUREHASH>
+    InstallerType: msix
+ManifestVersion: 0.1.0

@@ -1,0 +1,23 @@
+LIBRARY     WinGetUtil
+EXPORTS
+    WinGetLoggingInit
+    WinGetLoggingTerm
+    WinGetSQLiteIndexCreate
+    WinGetSQLiteIndexOpen
+    WinGetSQLiteIndexClose
+    WinGetSQLiteIndexAddManifest
+    WinGetSQLiteIndexUpdateManifest
+    WinGetSQLiteIndexRemoveManifest
+    WinGetSQLiteIndexPrepareForPackaging
+    WinGetSQLiteIndexCheckConsistency
+    WinGetValidateManifest
+    WinGetDownload
+    WinGetCompareVersions
+    WinGetValidateManifestV2
+    WinGetValidateManifestDependencies
+    WinGetCreateManifest
+    WinGetCloseManifest
+    WinGetValidateManifestV3
+    WinGetBeginInstallerMetadataCollection
+    WinGetCompleteInstallerMetadataCollection
+    WinGetMergeInstallerMetadata

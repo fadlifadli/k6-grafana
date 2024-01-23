@@ -1,0 +1,303 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+#include <windows.h>
+#include <winreg.h>
+#include <winerror.h>
+#include <iostream>
+#include <fstream>
+#include <filesystem>
+#include <sstream>
+
+using namespace std::filesystem;
+
+std::wstring_view RegistrySubkey = L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\";
+std::wstring_view DefaultProductID = L"{A499DD5E-8DC5-4AD2-911A-BCD0263295E9}";
+std::wstring_view DefaultDisplayName = L"AppInstallerTestExeInstaller";
+std::wstring_view DefaultDisplayVersion = L"1.0.0.0";
+
+path GenerateUninstaller(std::wostream& out, const path& installDirectory, const std::wstring& productID, bool useHKLM)
+{
+    path uninstallerPath = installDirectory;
+    uninstallerPath /= "UninstallTestExe.bat";
+
+    out << "Uninstaller located at path: " << uninstallerPath << std::endl;
+
+    path uninstallerOutputTextFilePath = installDirectory;
+    uninstallerOutputTextFilePath /= "TestExeUninstalled.txt";
+
+    std::wstring registryKey{ useHKLM ? L"HKEY_LOCAL_MACHINE\\" : L"HKEY_CURRENT_USER\\" };
+    registryKey += RegistrySubkey;
+    if (!productID.empty())
+    {
+        registryKey += productID;
+    }
+    else
+    {
+        registryKey += DefaultProductID;
+    }
+
+    std::wofstream uninstallerScript(uninstallerPath);
+    uninstallerScript << "@echo off\n";
+    uninstallerScript << "ECHO. >" << uninstallerOutputTextFilePath << "\n";
+    uninstallerScript << "ECHO AppInstallerTestExeInstaller.exe uninstalled successfully.\n";
+    uninstallerScript << "REG DELETE " << registryKey << " /f\n";
+    uninstallerScript.close();
+
+    return uninstallerPath;
+}
+
+void WriteToUninstallRegistry(
+    std::wostream& out,
+    const std::wstring& productID,
+    const path& uninstallerPath,
+    const std::wstring& displayName,
+    const std::wstring& displayVersion,
+    const std::wstring& installLocation,
+    bool useHKLM)
+{
+    HKEY hkey;
+    LONG lReg;
+
+    // String inputs to registry must be of wide char type
+    const wchar_t* publisher = L"Microsoft Corporation";
+    std::wstring uninstallString = uninstallerPath.wstring();
+    DWORD version = 1;
+
+    std::wstring registryKey{ RegistrySubkey };
+
+    if (!productID.empty()) 
+    {
+        registryKey += productID;
+        out << "Product Code overridden to: " << registryKey << std::endl;
+    }
+    else 
+    {
+        registryKey += DefaultProductID;
+        out << "Default Product Code used: " << registryKey << std::endl;
+    }
+
+    lReg = RegCreateKeyEx(
+        useHKLM ? HKEY_LOCAL_MACHINE : HKEY_CURRENT_USER,
+        registryKey.c_str(),
+        0,
+        NULL,
+        REG_OPTION_NON_VOLATILE,
+        KEY_ALL_ACCESS,
+        NULL,
+        &hkey,
+        NULL);
+
+    if (lReg == ERROR_SUCCESS)
+    {
+        out << "Successfully opened registry key" << std::endl;
+
+        // Set Display Name Property Value
+        if (LONG res = RegSetValueEx(hkey, L"DisplayName", NULL, REG_SZ, (LPBYTE)displayName.c_str(), (DWORD)(displayName.length() + 1) * sizeof(wchar_t)) != ERROR_SUCCESS)
+        {
+            out << "Failed to write DisplayName value. Error Code: " << res << std::endl;
+        }
+
+        // Set Display Version Property Value
+        if (LONG res = RegSetValueEx(hkey, L"DisplayVersion", NULL, REG_SZ, (LPBYTE)displayVersion.c_str(), (DWORD)(displayVersion.length() + 1) * sizeof(wchar_t)) != ERROR_SUCCESS)
+        {
+            out << "Failed to write DisplayVersion value. Error Code: " << res << std::endl;
+        }
+
+        // Set Publisher Property Value
+        if (LONG res = RegSetValueEx(hkey, L"Publisher", NULL, REG_SZ, (LPBYTE)publisher, (DWORD)(wcslen(publisher) + 1) * sizeof(wchar_t)) != ERROR_SUCCESS)
+        {
+            out << "Failed to write Publisher value. Error Code: " << res << std::endl;
+        }
+
+        // Set UninstallString Property Value
+        if (LONG res = RegSetValueEx(hkey, L"UninstallString", NULL, REG_EXPAND_SZ, (LPBYTE)uninstallString.c_str(), (DWORD)(uninstallString.length() + 1) * sizeof(wchar_t)) != ERROR_SUCCESS)
+        {
+            out << "Failed to write UninstallString value. Error Code: " << res << std::endl;
+        }
+
+        // Set Version Property Value
+        if (LONG res = RegSetValueEx(hkey, L"Version", NULL, REG_DWORD, (LPBYTE)&version, sizeof(version)) != ERROR_SUCCESS)
+        {
+            out << "Failed to write Version value. Error Code: " << res << std::endl;
+        }
+
+        // Set InstallLocation Property Value
+        if (LONG res = RegSetValueEx(hkey, L"InstallLocation", NULL, REG_SZ, (LPBYTE)installLocation.c_str(), (DWORD)(installLocation.length() + 1) * sizeof(wchar_t)) != ERROR_SUCCESS)
+        {
+            out << "Failed to write InstallLocation value. Error Code: " << res << std::endl;
+        }
+
+        out << "Write to registry key completed" << std::endl;
+    }
+    else {
+        out << "Key Creation Failed" << std::endl;
+    }
+
+    RegCloseKey(hkey);
+}
+
+// The installer prints all args to an output file and writes to the Uninstall registry key
+int wmain(int argc, const wchar_t** argv)
+{
+    path installDirectory = temp_directory_path();
+    std::wstringstream outContent;
+    std::wstring productCode;
+    std::wstring displayName;
+    std::wstring displayVersion;
+    std::wstring aliasToExecute;
+    std::wstring aliasArguments;
+    bool useHKLM = false;
+    bool noOperation = false;
+    int exitCode = 0;
+
+    // Output to cout by default, but swap to a file if requested
+    std::wostream* out = &std::wcout;
+    std::wofstream logFile;
+
+    for (int i = 1; i < argc; i++)
+    {
+        outContent << argv[i] << ' ';
+
+        // Supports custom install path.
+        if (_wcsicmp(argv[i], L"/InstallDir") == 0)
+        {
+            if (++i < argc)
+            {
+                installDirectory = argv[i];
+                outContent << argv[i] << ' ';
+            }
+        }
+
+        // Supports custom exit code
+        else if (_wcsicmp(argv[i], L"/ExitCode") == 0)
+        {
+            if (++i < argc)
+            {
+                exitCode = static_cast<int>(std::stoll(argv[i], 0, 0));
+                outContent << argv[i] << ' ';
+            }
+        }
+
+        // Supports custom product code ID
+        else if (_wcsicmp(argv[i], L"/ProductID") == 0)
+        {
+            if (++i < argc)
+            {
+                productCode = argv[i];
+                outContent << argv[i] << ' ';
+            }
+        }
+
+        // Supports custom DisplayName
+        else if (_wcsicmp(argv[i], L"/DisplayName") == 0)
+        {
+            if (++i < argc)
+            {
+                displayName = argv[i];
+                outContent << argv[i] << ' ';
+            }
+        }
+
+        // Supports custom version
+        else if (_wcsicmp(argv[i], L"/Version") == 0)
+        {
+            if (++i < argc)
+            {
+                displayVersion = argv[i];
+                outContent << argv[i] << ' ';
+            }
+        }
+
+        // Supports log file
+        else if (_wcsicmp(argv[i], L"/LogFile") == 0)
+        {
+            if (++i < argc)
+            {
+                logFile = std::wofstream(argv[i], std::wofstream::out | std::wofstream::trunc);
+                out = &logFile;
+                outContent << argv[i] << ' ';
+            }
+        }
+
+        // Writes to HKLM
+        else if (_wcsicmp(argv[i], L"/UseHKLM") == 0)
+        {
+            useHKLM = true;
+        }
+
+        // Executes a command alias during installation
+        else if (_wcsicmp(argv[i], L"/AliasToExecute") == 0)
+        {
+            if (++i < argc)
+            {
+                aliasToExecute = argv[i];
+                outContent << argv[i] << ' ';
+            }
+        }
+
+        // Additional arguments to include when executing the command alias during installation
+        else if (_wcsicmp(argv[i], L"/AliasArguments") == 0)
+        {
+            if (++i < argc)
+            {
+                aliasArguments = argv[i];
+                outContent << argv[i] << ' ';
+            }
+        }
+
+        // Returns the success exit code to emulate being invoked by another caller.
+        else if (_wcsicmp(argv[i], L"/NoOperation") == 0)
+        {
+            noOperation = true;
+        }
+    }
+
+    if (noOperation)
+    {
+        return exitCode;
+    }
+
+    if (!aliasToExecute.empty())
+    {
+        SHELLEXECUTEINFOW execInfo = { 0 };
+        execInfo.cbSize = sizeof(execInfo);
+        execInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
+        execInfo.lpFile = aliasToExecute.c_str();
+        
+        if (!aliasArguments.empty())
+        {
+            execInfo.lpParameters = aliasArguments.c_str();
+        }
+        execInfo.nShow = SW_SHOW;
+
+        if (!ShellExecuteExW(&execInfo) || !execInfo.hProcess)
+        {
+            return -1;
+        }
+    }
+
+    if (displayName.empty())
+    {
+        displayName = DefaultDisplayName;
+    }
+
+    if (displayVersion.empty())
+    {
+        displayVersion = DefaultDisplayVersion;
+    }
+
+    path outFilePath = installDirectory;
+    outFilePath /= "TestExeInstalled.txt";
+    std::wofstream file(outFilePath, std::ofstream::out);
+
+    file << outContent.str();
+
+    file.close();
+
+    path uninstallerPath = GenerateUninstaller(*out, installDirectory, productCode, useHKLM);
+
+    WriteToUninstallRegistry(*out, productCode, uninstallerPath, displayName, displayVersion, installDirectory.wstring(), useHKLM);
+
+    return exitCode;
+}

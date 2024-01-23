@@ -1,0 +1,13 @@
+Id: AppInstallerTest.TestNullsoftInstaller
+Name: TestNullsoftInstaller
+Version: 1.0.0.0
+Publisher: AppInstallerTest
+License: Test
+Installers:
+  - Arch: x86
+    Url: https://localhost:5001/TestKit/AppInstallerTestExeInstaller/AppInstallerTestExeInstaller.exe
+    Sha256: <EXEHASH>
+    InstallerType: nullsoft
+    Switches:
+      InstallLocation: /InstallDir <INSTALLPATH>
+ManifestVersion: 0.1.0

@@ -1,0 +1,12 @@
+Id: AppInstallerTest.TestMsiInstaller
+Name: TestMsiInstaller
+Version: 1.0.0.0
+Publisher: AppInstallerTest
+License: Test
+Installers:
+  - Arch: x86
+    Url: https://localhost:5001/TestKit/AppInstallerTestMsiInstaller/AppInstallerTestMsiInstaller.msi
+    Sha256: <MSIHASH>
+    InstallerType: msi
+    ProductCode: '{A5D36CF1-1993-4F63-BFB4-3ACD910D36A1}'
+ManifestVersion: 0.1.0
